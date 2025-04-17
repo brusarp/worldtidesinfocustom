@@ -190,6 +190,7 @@ class TidesPicture_FromFile(Camera):
         self._generated_at = None
         self._last_requested_date = None
         self._image = None
+        self._last_mod_time = 0
 
     @property
     def device_info(self):
@@ -264,17 +265,28 @@ class TidesPicture_FromFile(Camera):
             )
         if read_ok:
             self._image = read_image
+            self._last_mod_time = os.path.getmtime(self._image_filename)
+            self._generated_at = time.ctime(self._last_mod_time)
             self._last_requested_date = current_time
-            self._generated_at = time.ctime(os.path.getmtime(self._image_filename))
+
+    def _update_image_if_needed(self):
+        """Check if the image file has been updated and reload if necessary."""
+        if not os.path.exists(self._image_filename):
+            return
+        mod_time = os.path.getmtime(self._image_filename)
+        if mod_time != self._last_mod_time:
+            self._get_image()
 
     def camera_image(self, width, height):
         """Return image response."""
         _LOGGER.debug("Camera : Sync Image Tides sensor %s", self._name)
+        self._update_image_if_needed()
         return self._image
 
     async def async_camera_image(self, width, height):
         """Fetch new image."""
         _LOGGER.debug("Camera : Async Image Tides sensor %s", self._name)
+        await self.hass.async_add_executor_job(self._update_image_if_needed)
         return self._image
 
     def update(self):
